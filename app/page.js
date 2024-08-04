@@ -1,113 +1,241 @@
-import Image from "next/image";
+"use client";
+import * as React from "react";
+import Box from "@mui/material/Box";
+import Tab from "@mui/material/Tab";
+import TabContext from "@mui/lab/TabContext";
+import TabList from "@mui/lab/TabList";
+import TabPanel from "@mui/lab/TabPanel";
+import TextField from "@mui/material/TextField";
+import Button from "@mui/material/Button";
+import Typography from "@mui/material/Typography";
+import { useFormik } from "formik";
+import {
+  collection,
+  addDoc,
+  query,
+  onSnapshot,
+  deleteDoc,
+  doc,
+  updateDoc
+} from "firebase/firestore";
+import { db } from "./firebase";
+import {
+  MenuItem,
+  Select,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+} from "@mui/material";
+import EditProductModal from './modal';
 
-export default function Home() {
+export default function LabTabs() {
+  const [value, setValue] = React.useState("1");
+  const [products, setProducts] = React.useState([]);
+  const [searchQuery, setSearchQuery] = React.useState("");
+  const [filteredProducts, setFilteredProducts] = React.useState([]);
+  const [openEditModal, setOpenEditModal] = React.useState(false);
+  const [selectedProduct, setSelectedProduct] = React.useState(null);
+
+  React.useEffect(() => {
+    const q = query(collection(db, "products"));
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const productsArray = [];
+      querySnapshot.forEach((doc) => {
+        productsArray.push({ ...doc.data(), id: doc.id });
+      });
+      setProducts(productsArray);
+      setFilteredProducts(productsArray);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const formik = useFormik({
+    initialValues: {
+      product: "",
+      number: "",
+    },
+    onSubmit: async (values) => {
+      try {
+        const docRef = await addDoc(collection(db, "products"), values);
+        console.log("Document written with ID: ", docRef.id);
+        formik.resetForm();
+      } catch (error) {
+        console.error("Error adding document: ", error);
+      }
+    },
+  });
+
+  const handleDelete = async (productId) => {
+    try {
+      await deleteDoc(doc(db, "products", productId));
+      console.log("Document deleted with ID: ", productId);
+    } catch (error) {
+      console.error("Error deleting document: ", error);
+    }
+  };
+
+  const handleEdit = (product) => {
+    setSelectedProduct(product);
+    setOpenEditModal(true);
+  };
+
+  const handleSearch = (event) => {
+    const query = event.target.value.toLowerCase();
+    setSearchQuery(query);
+
+    const filtered = products.filter((product) =>
+      product.product.toLowerCase().includes(query)
+    );
+    setFilteredProducts(filtered);
+  };
+
+  const handleChange = (event, newValue) => {
+    setValue(newValue);
+  };
+
+  const handleSelectChange = (event, product) => {
+    const action = event.target.value;
+    if (action === "edit") {
+      handleEdit(product);
+    } else if (action === "delete") {
+      handleDelete(product.id);
+    }
+  };
+
+  const handleEditSubmit = async (updatedProduct) => {
+    try {
+      const productDoc = doc(db, "products", updatedProduct.id); // Reference to the document
+      await updateDoc(productDoc, { // Update only specific fields
+        product: updatedProduct.product,
+        number: updatedProduct.number
+      });
+      console.log("Document updated with ID: ", updatedProduct.id);
+      setOpenEditModal(false); // Close the modal after successful update
+    } catch (error) {
+      console.error("Error updating document: ", error);
+    }
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">app/page.js</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <main className="flex flex-col p-2 justify-center items-center">
+      <TabContext value={value}>
+        <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+          <TabList onChange={handleChange} aria-label="lab API tabs example">
+            <Tab label="Form" value="1" />
+            <Tab label="Items List" value="2" />
+          </TabList>
+        </Box>
+        <TabPanel value="1">
+          {/* Form for adding new items */}
+          <form
+            className="flex flex-row justify-center items-center gap-1"
+            onSubmit={formik.handleSubmit}
           >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
+            <TextField
+              id="product"
+              type="text"
+              label="Product"
+              value={formik.values.product}
+              onChange={formik.handleChange}
+              variant="outlined"
+              size="small"
+              required
             />
-          </a>
-        </div>
-      </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-full sm:before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full sm:after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px] z-[-1]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800 hover:dark:bg-opacity-30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore starter templates for Next.js.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50 text-balance`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
+            <TextField
+              id="number"
+              type="text"
+              label="Number"
+              value={formik.values.number}
+              onChange={formik.handleChange}
+              variant="outlined"
+              size="small"
+              required
+            />
+            <Button type="submit" variant="contained">
+              +
+            </Button>
+          </form>
+          {/* Display the two most recently added products */}
+          {products.length > 0 && (
+            <Box mt={4}>
+              <Typography variant="h6">Recently Added Products</Typography>
+              {products.slice(-2).map((product, index) => (
+                <Box
+                  key={product.id}
+                  gap={12}
+                  display="flex"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  mt={index === 0 ? 2 : 1}
+                >
+                  <span>{product.product}</span>
+                  <span>{product.number}</span>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </TabPanel>
+        <TabPanel value="2">
+          {/* List of items with search and delete functionality */}
+          <Typography variant="h6">Products</Typography>
+          <TextField
+            id="search"
+            type="text"
+            label="Search Products"
+            value={searchQuery}
+            onChange={handleSearch}
+            variant="outlined"
+            size="small"
+            className="mb-4"
+          />
+          {filteredProducts.length > 0 ? (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Name</TableCell>
+                    <TableCell>Number</TableCell>
+                    <TableCell>Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredProducts.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell>{product.product}</TableCell>
+                      <TableCell>{product.number}</TableCell>
+                      <TableCell>
+                        <Select
+                          value=""
+                          onChange={(event) => handleSelectChange(event, product)}
+                          displayEmpty
+                        >
+                          <MenuItem value="" disabled>
+                            
+                          </MenuItem>
+                          <MenuItem value="edit">Edit</MenuItem>
+                          <MenuItem value="delete">Delete</MenuItem>
+                        </Select>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Box>No products available</Box>
+          )}
+        </TabPanel>
+      </TabContext>
+      <EditProductModal
+        open={openEditModal}
+        handleClose={() => setOpenEditModal(false)}
+        product={selectedProduct}
+        onSubmit={handleEditSubmit}
+      />
     </main>
   );
 }
